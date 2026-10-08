@@ -1,0 +1,70 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Fisher's Discriminant: find the best direction</title>
+<style>
+:root{box-sizing:border-box;padding:env(safe-area-inset-top,0px) 0 env(safe-area-inset-bottom,0px);--bg:#fff;--fg:#111827;--mut:#6b7280;--card:#f3f4f6;--a:#2563eb;--b:#f97316;--ok:#16a34a;--grid:#d1d5db}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#111827;--fg:#f3f4f6;--mut:#9ca3af;--card:#1f2937;--a:#60a5fa;--b:#fb923c;--ok:#4ade80;--grid:#374151}}
+:root[data-theme="dark"]{--bg:#111827;--fg:#f3f4f6;--mut:#9ca3af;--card:#1f2937;--a:#60a5fa;--b:#fb923c;--ok:#4ade80;--grid:#374151}
+*{box-sizing:border-box}html,body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.4 system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
+main{max-width:520px;margin:0 auto;padding:16px}
+h1{font-size:19px;margin:0 0 4px}p.s{margin:0 0 12px;color:var(--mut);font-size:13px}
+canvas{display:block;width:100%;background:var(--bg);border:1px solid var(--grid);border-radius:10px;margin-bottom:10px}
+.row{display:flex;gap:8px;flex-wrap:wrap;margin:8px 0}
+button{flex:1 1 40%;padding:9px 6px;border:1px solid var(--grid);background:var(--card);color:var(--fg);border-radius:8px;font:inherit;font-size:13px;cursor:pointer}
+button.p{background:var(--ok);border-color:var(--ok);color:#fff;font-weight:600}
+.r{display:flex;gap:8px}.r div{flex:1;background:var(--card);border-radius:10px;padding:8px 10px}
+.r b{display:block;font-size:20px}.r span{font-size:11px;color:var(--mut)}
+input[type=range]{width:100%}label{font-size:13px;color:var(--mut)}
+</style></head><body><main>
+<h1>Fisher's 1936 idea, live</h1>
+<p class="s">Iris versicolor (blue) vs virginica (orange), petal length &amp; width, standardized. Rotate the line: the data is projected onto it.</p>
+<canvas id="sc" height="300"></canvas>
+<canvas id="hi" height="120"></canvas>
+<label>Projection angle: <b id="ang"></b>&deg;</label>
+<input type="range" id="sl" min="0" max="180" step="0.5" value="0">
+<div class="row"><button id="bf" class="p">Snap to Fisher's best</button><button id="bm">Line between the means</button><button id="bl">Petal length only</button><button id="bw">Petal width only</button></div>
+<div class="r"><div><b id="J"></b><span>Fisher criterion J (gap&sup2; / spread)</span></div><div><b id="E"></b><span>misclassified of 100</span></div></div>
+<canvas id="jc" height="90" style="margin-top:10px"></canvas>
+<p class="s">Bottom curve: J at every angle. Its peak is Fisher's discriminant, the direction that pushes the class means apart while keeping each class tight.</p>
+</main><script>
+const D={"A":[[-0.25,-0.65],[-0.492,-0.414],[-0.007,-0.414],[-1.097,-0.885],[-0.371,-0.414],[-0.492,-0.885],[-0.25,-0.179],[-1.945,-1.591],[-0.371,-0.885],[-1.219,-0.65],[-1.703,-1.591],[-0.855,-0.414],[-1.097,-1.591],[-0.25,-0.65],[-1.582,-0.885],[-0.613,-0.65],[-0.492,-0.414],[-0.976,-1.591],[-0.492,-0.414],[-1.219,-1.356],[-0.128,0.292],[-1.097,-0.885],[-0.007,-0.414],[-0.25,-1.121],[-0.734,-0.885],[-0.613,-0.65],[-0.128,-0.65],[0.114,0.057],[-0.492,-0.414],[-1.703,-1.591],[-1.34,-1.356],[-1.461,-1.591],[-1.219,-1.121],[0.235,-0.179],[-0.492,-0.414],[-0.492,-0.179],[-0.25,-0.414],[-0.613,-0.885],[-0.976,-0.885],[-1.097,-0.885],[-0.613,-1.121],[-0.371,-0.65],[-1.097,-1.121],[-1.945,-1.591],[-0.855,-0.885],[-0.855,-1.121],[-0.855,-0.885],[-0.734,-0.885],[-2.309,-1.356],[-0.976,-0.885]],"B":[[1.325,1.94],[0.235,0.527],[1.204,0.998],[0.841,0.292],[1.083,1.234],[2.052,0.998],[-0.492,0.057],[1.689,0.292],[1.083,0.292],[1.446,1.94],[0.235,0.763],[0.477,0.527],[0.719,0.998],[0.114,0.763],[0.235,1.704],[0.477,1.469],[0.719,0.292],[2.173,1.234],[2.415,1.469],[0.114,-0.414],[0.962,1.469],[-0.007,0.763],[2.173,0.763],[-0.007,0.292],[0.962,0.998],[1.325,0.292],[-0.128,0.292],[-0.007,0.292],[0.841,0.998],[1.083,-0.179],[1.446,0.527],[1.81,0.763],[0.841,1.234],[0.235,-0.414],[0.841,-0.65],[1.446,1.469],[0.841,1.704],[0.719,0.292],[-0.128,0.292],[0.598,0.998],[0.841,1.704],[0.235,1.469],[0.235,0.527],[1.204,1.469],[0.962,1.94],[0.356,1.469],[0.114,0.527],[0.356,0.763],[0.598,1.469],[0.235,0.292]]};
+function proj(P,t){const c=Math.cos(t),s=Math.sin(t);return P.map(p=>p[0]*c+p[1]*s)}
+const mean=a=>a.reduce((x,y)=>x+y,0)/a.length;
+const vr=a=>{const m=mean(a);return a.reduce((x,y)=>x+(y-m)*(y-m),0)/(a.length-1)};
+function stats(t){const a=proj(D.A,t),b=proj(D.B,t),ma=mean(a),mb=mean(b),thr=(ma+mb)/2;
+const J=(mb-ma)**2/(vr(a)+vr(b));const hi=mb>ma;
+const err=a.filter(v=>hi?v>thr:v<thr).length+b.filter(v=>hi?v<thr:v>thr).length;return{a,b,thr,J,err}}
+
+const $=id=>document.getElementById(id);
+let best=0,bt=0;const JC=[];for(let k=0;k<=180;k+=0.5){const s=stats(k*Math.PI/180);JC.push(s.J);if(s.J>best){best=s.J;bt=k}}
+const md=(()=>{const mx=i=>mean(D.B.map(p=>p[i]))-mean(D.A.map(p=>p[i]));return Math.atan2(mx(1),mx(0))*180/Math.PI})();
+let ang=0;
+function sizeCv(c,h){const w=c.parentElement.clientWidth-0;const r=window.devicePixelRatio||1;c.width=Math.round((c.clientWidth||w)*r);c.height=h*r;c.style.height=h+'px';const g=c.getContext('2d');g.setTransform(r,0,0,r,0,0);return[g,c.clientWidth||w,h]}
+const css=n=>getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+function draw(){
+ const t=ang*Math.PI/180,c=Math.cos(t),s=Math.sin(t),st=stats(t),A=css('--a'),B=css('--b'),F=css('--fg'),M=css('--mut'),G=css('--grid'),K=css('--ok');
+ $('ang').textContent=ang.toFixed(1);$('J').textContent=st.J.toFixed(2);$('E').textContent=st.err;$('sl').value=ang;
+ // scatter
+ let [g,w,h]=sizeCv($('sc'),300);const R=2.6,px=x=>w/2+x*(Math.min(w,h)/2-18)/R,py=y=>h/2-y*(Math.min(w,h)/2-18)/R;
+ g.clearRect(0,0,w,h);g.strokeStyle=G;g.lineWidth=1;g.beginPath();g.moveTo(0,py(0));g.lineTo(w,py(0));g.moveTo(px(0),0);g.lineTo(px(0),h);g.stroke();
+ g.strokeStyle=F;g.lineWidth=2;g.beginPath();g.moveTo(px(-R*c),py(-R*s));g.lineTo(px(R*c),py(R*s));g.stroke();
+ for(const [P,col] of [[D.A,A],[D.B,B]]){for(const p of P){const q=p[0]*c+p[1]*s;g.strokeStyle=col;g.globalAlpha=.25;g.lineWidth=1;g.beginPath();g.moveTo(px(p[0]),py(p[1]));g.lineTo(px(q*c),py(q*s));g.stroke();g.globalAlpha=1;g.fillStyle=col;g.beginPath();g.arc(px(p[0]),py(p[1]),3.2,0,7);g.fill()}}
+ g.fillStyle=M;g.font='11px system-ui';g.textAlign='left';g.fillText('x: petal length (z)',8,h-8);g.textAlign='right';g.fillText('y: petal width (z)',w-8,16);
+ // histogram
+ [g,w,h]=sizeCv($('hi'),120);g.clearRect(0,0,w,h);const nb=30,lo=-3.5,hi=3.5,bw=(hi-lo)/nb,hs=[new Array(nb).fill(0),new Array(nb).fill(0)];
+ st.a.forEach(v=>{const i=Math.floor((v-lo)/bw);if(i>=0&&i<nb)hs[0][i]++});st.b.forEach(v=>{const i=Math.floor((v-lo)/bw);if(i>=0&&i<nb)hs[1][i]++});
+ const mx=Math.max(...hs[0],...hs[1],1),X=v=>12+(v-lo)/(hi-lo)*(w-24);
+ [[hs[0],A],[hs[1],B]].forEach(([H,col])=>{g.fillStyle=col;g.globalAlpha=.55;H.forEach((n,i)=>{const bh=n/mx*(h-34);g.fillRect(X(lo+i*bw)+1,h-20-bh,(w-24)/nb-2,bh)});g.globalAlpha=1});
+ g.strokeStyle=K;g.setLineDash([5,4]);g.lineWidth=2;g.beginPath();g.moveTo(X(st.thr),6);g.lineTo(X(st.thr),h-20);g.stroke();g.setLineDash([]);
+ g.fillStyle=M;g.font='11px system-ui';g.textAlign='left';g.fillText('projected values (1-D); dashed = decision cut',12,h-5);
+ // J curve
+ [g,w,h]=sizeCv($('jc'),90);g.clearRect(0,0,w,h);const jm=Math.max(...JC),xx=i=>12+i/(JC.length-1)*(w-24),yy=v=>h-18-v/jm*(h-34);
+ g.strokeStyle=K;g.lineWidth=2.2;g.beginPath();JC.forEach((v,i)=>i?g.lineTo(xx(i),yy(v)):g.moveTo(xx(i),yy(v)));g.stroke();
+ const ci=Math.round(ang*2);g.fillStyle=F;g.beginPath();g.arc(xx(ci),yy(JC[ci]),5,0,7);g.fill();
+ g.fillStyle=M;g.font='11px system-ui';g.textAlign='left';g.fillText('0\u00b0',12,h-4);g.textAlign='right';g.fillText('180\u00b0  (angle)',w-12,h-4);
+}
+const set=a=>{ang=((a%180)+180)%180;draw()};
+$('sl').oninput=e=>set(+e.target.value);$('bf').onclick=()=>set(bt);$('bm').onclick=()=>set(md);$('bl').onclick=()=>set(0);$('bw').onclick=()=>set(90);
+addEventListener('resize',draw);matchMedia('(prefers-color-scheme:dark)').addEventListener('change',draw);
+set(0);
+</script></body></html>
