@@ -1,0 +1,59 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>McCulloch-Pitts Neuron (1943): live demo</title>
+<style>
+:root{box-sizing:border-box;padding:env(safe-area-inset-top,0px) 0 env(safe-area-inset-bottom,0px);--bg:#fff;--fg:#111827;--mut:#6b7280;--card:#f3f4f6;--on:#16a34a;--inh:#dc2626;--blue:#2563eb;--grid:#d1d5db}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#111827;--fg:#f3f4f6;--mut:#9ca3af;--card:#1f2937;--on:#4ade80;--inh:#f87171;--blue:#60a5fa;--grid:#374151}}
+:root[data-theme="dark"]{--bg:#111827;--fg:#f3f4f6;--mut:#9ca3af;--card:#1f2937;--on:#4ade80;--inh:#f87171;--blue:#60a5fa;--grid:#374151}
+*{box-sizing:border-box}html,body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.4 system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
+main{max-width:520px;margin:0 auto;padding:16px}h1{font-size:19px;margin:0 0 4px}.s{margin:0 0 10px;color:var(--mut);font-size:13px}
+svg{width:100%;height:auto;display:block;background:var(--card);border-radius:12px}
+svg text{fill:var(--fg);font:600 13px system-ui;text-anchor:middle;dominant-baseline:central}
+.n{fill:var(--bg);stroke:var(--grid);stroke-width:2;cursor:pointer}.n.on{fill:var(--blue);stroke:var(--blue)}.n.on+text{fill:#fff}
+.ctl{display:grid;grid-template-columns:auto 1fr;gap:6px 10px;align-items:center;margin:10px 0}
+.seg{display:flex;gap:4px}button{padding:7px 10px;border:1px solid var(--grid);background:var(--card);color:var(--fg);border-radius:8px;font:inherit;font-size:13px;cursor:pointer}
+button.a{background:var(--blue);border-color:var(--blue);color:#fff}
+.box{background:var(--card);border-radius:10px;padding:8px 12px;margin:8px 0;font-size:14px}
+table{width:100%;border-collapse:collapse;font-size:13px;text-align:center}th,td{padding:4px;border-bottom:1px solid var(--grid)}
+tr.cur td{background:var(--blue);color:#fff;font-weight:700}.y{color:var(--on);font-weight:700}tr.cur .y{color:#fff}
+.pre{display:flex;gap:6px;flex-wrap:wrap;margin:8px 0}
+</style></head><body><main>
+<h1>McCulloch &amp; Pitts neuron, 1943</h1>
+<p class="s">Tap an input circle to switch it 0/1. Each input is excitatory (E, +1), inhibitory (I, veto) or off. The neuron fires 1 only if no active inhibitor and (active E count) &ge; threshold.</p>
+<svg id="sv" viewBox="0 0 320 190" aria-label="neuron diagram"></svg>
+<div class="ctl" id="ctl"></div>
+<div class="box" id="say"></div>
+<div class="pre"><button data-p="and">AND</button><button data-p="or">OR</button><button data-p="inh">x1 AND NOT x2</button><button data-p="nor">NOR (x3 = bias)</button><button data-p="xor">Try XOR</button></div>
+<div class="box" id="xor" hidden></div>
+<table id="tt"></table>
+<script>
+let x=[1,1,0],T=['E','E','off'],th=2;
+const $=i=>document.getElementById(i);
+function fire(x,T,th){let s=0;for(let i=0;i<3;i++){if(T[i]=='I'&&x[i])return 0;if(T[i]=='E'&&x[i])s++}return s>=th?1:0}
+function count(target){let n=0,tot=0;const ty=['E','I','off'];for(const a of ty)for(const b of ty)for(const c of ty)for(let t=0;t<=3;t++){tot++;let ok=1;for(const u of[0,1])for(const v of[0,1])if(fire([u,v,0],[a,b,c],t)!=target(u,v))ok=0;n+=ok}return[n,tot]}
+const P={and:[[1,1,0],['E','E','off'],2],or:[[1,0,0],['E','E','off'],1],inh:[[1,0,0],['E','I','off'],1],nor:[[0,0,1],['I','I','E'],1]};
+function draw(){
+ const out=fire(x,T,th),Y=[40,95,150];let h='';
+ for(let i=0;i<3;i++){const dx=190-40,dy=95-Y[i],L=Math.hypot(dx,dy),ux=dx/L,uy=dy/L,ex=190-ux*34,ey=95-uy*34;
+  const col=T[i]=='off'?'var(--grid)':(x[i]?(T[i]=='E'?'var(--on)':'var(--inh)'):'var(--grid)');
+  h+=`<line x1="58" y1="${Y[i]}" x2="${ex}" y2="${ey}" stroke="${col}" stroke-width="3" ${T[i]=='off'?'stroke-dasharray="4 4"':''}/>`;
+  if(T[i]=='I')h+=`<circle cx="${ex-ux*5}" cy="${ey-uy*5}" r="5" fill="var(--bg)" stroke="${col}" stroke-width="3"/>`;
+  if(T[i]=='E')h+=`<polygon points="${ex},${ey} ${ex-ux*9-uy*5},${ey-uy*9+ux*5} ${ex-ux*9+uy*5},${ey-uy*9-ux*5}" fill="${col}"/>`;
+  h+=`<circle class="n ${x[i]?'on':''}" data-i="${i}" cx="40" cy="${Y[i]}" r="18"/><text x="40" y="${Y[i]}" pointer-events="none">x${i+1}=${x[i]}</text>`}
+ h+=`<circle cx="190" cy="95" r="34" fill="var(--bg)" stroke="${out?'var(--on)':'var(--grid)'}" stroke-width="4"/><text x="190" y="85">&theta; = ${th}</text><text x="190" y="105">out ${out}</text>`;
+ h+=`<line x1="224" y1="95" x2="282" y2="95" stroke="${out?'var(--on)':'var(--grid)'}" stroke-width="3"/><polygon points="290,95 280,89 280,101" fill="${out?'var(--on)':'var(--grid)'}"/>`;
+ $('sv').innerHTML=h;
+ let c='';for(let i=0;i<3;i++)c+=`<span>x${i+1}</span><div class="seg">${['E','I','off'].map(t=>`<button data-i="${i}" data-t="${t}" class="${T[i]==t?'a':''}">${t=='off'?'off':t=='E'?'E (+1)':'I (veto)'}</button>`).join('')}</div>`;
+ c+=`<span>&theta;</span><div class="seg"><button data-th="-1">&minus;</button><button class="a">${th}</button><button data-th="1">+</button></div>`;$('ctl').innerHTML=c;
+ let s=0,v=false;for(let i=0;i<3;i++){if(T[i]=='E'&&x[i])s++;if(T[i]=='I'&&x[i])v=true}
+ $('say').innerHTML=v?`An active inhibitor vetoes everything &rarr; <b>output 0</b>`:`Active excitatory inputs = <b>${s}</b>, threshold = <b>${th}</b> &rarr; ${s>=th?'fires':'silent'}, <b>output ${out}</b>`;
+ let t='<tr><th>x1</th><th>x2</th><th>x3</th><th>out</th></tr>';
+ for(let k=0;k<8;k++){const r=[k>>2&1,k>>1&1,k&1];t+=`<tr class="${r.join()==x.join()?'cur':''}"><td>${r[0]}</td><td>${r[1]}</td><td>${r[2]}</td><td class="y">${fire(r,T,th)}</td></tr>`}
+ $('tt').innerHTML=t}
+$('sv').onclick=e=>{const i=e.target.dataset.i;if(i!=null){x[i]^=1;draw()}};
+$('ctl').onclick=e=>{const d=e.target.dataset;if(d.t){T[d.i]=d.t}else if(d.th){th=Math.max(0,Math.min(3,th+ +d.th))}draw()};
+document.querySelector('.pre').onclick=e=>{const p=e.target.dataset.p;if(!p)return;
+ if(p=='xor'){const[n,tot]=count((u,v)=>u^v),[a]=count((u,v)=>u&v);$('xor').hidden=false;$('xor').innerHTML=`Searched all <b>${tot}</b> settings of types and threshold: <b>${n}</b> compute XOR (for comparison, <b>${a}</b> compute AND). One neuron cannot do XOR; you need a small network.`;return}
+ [x,T,th]=[P[p][0].slice(),P[p][1].slice(),P[p][2]];$('xor').hidden=true;draw()};
+draw();
+</script></main></body></html>
